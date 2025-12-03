@@ -10,12 +10,11 @@ import { getStreamUrl } from '../services/api';
 const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
-  const [isSpeedUp, setIsSpeedUp] = useState(false);
   const [showSpeedIndicator, setShowSpeedIndicator] = useState(false);
   const normalSpeedRef = useRef(1);
   const speedUpMultiplier = 2;
   const holdTimeoutRef = useRef(null);
-  const isHoldingRef = useRef(false);
+  const isSpeedUpRef = useRef(false);
   const mouseDownTimeRef = useRef(null);
 
   // Handle speed up activation
@@ -23,7 +22,7 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
     if (videoRef.current && !videoRef.current.paused) {
       normalSpeedRef.current = videoRef.current.playbackRate;
       videoRef.current.playbackRate = speedUpMultiplier;
-      setIsSpeedUp(true);
+      isSpeedUpRef.current = true;
       setShowSpeedIndicator(true);
     }
   }, []);
@@ -32,20 +31,19 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
   const deactivateSpeedUp = useCallback(() => {
     if (videoRef.current) {
       videoRef.current.playbackRate = normalSpeedRef.current;
-      setIsSpeedUp(false);
-      setShowSpeedIndicator(false);
     }
-    isHoldingRef.current = false;
+    isSpeedUpRef.current = false;
+    setShowSpeedIndicator(false);
     if (holdTimeoutRef.current) {
       clearTimeout(holdTimeoutRef.current);
       holdTimeoutRef.current = null;
     }
   }, []);
 
-  // Keyboard event handlers
+  // Keyboard event handlers for spacebar hold to speed up
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only respond to spacebar when video player is focused or in focus
+      // Only respond to spacebar
       if (e.code === 'Space' && !e.repeat) {
         // Check if user is typing in an input
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -54,40 +52,22 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
         
         e.preventDefault();
         
-        if (!isHoldingRef.current) {
-          isHoldingRef.current = true;
-          // Start a timer - if held for 200ms, activate speed up
-          holdTimeoutRef.current = setTimeout(() => {
-            activateSpeedUp();
-          }, 200);
-        }
+        // Immediately activate speed up when spacebar is pressed
+        activateSpeedUp();
       }
     };
 
     const handleKeyUp = (e) => {
       if (e.code === 'Space') {
+        // Check if user is typing in an input
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          return;
+        }
+        
         e.preventDefault();
         
-        if (holdTimeoutRef.current) {
-          clearTimeout(holdTimeoutRef.current);
-          holdTimeoutRef.current = null;
-        }
-        
-        if (isSpeedUp) {
-          // Was holding for speed - just deactivate
-          deactivateSpeedUp();
-        } else if (isHoldingRef.current) {
-          // Was a quick tap - toggle play/pause
-          if (videoRef.current) {
-            if (videoRef.current.paused) {
-              videoRef.current.play();
-            } else {
-              videoRef.current.pause();
-            }
-          }
-        }
-        
-        isHoldingRef.current = false;
+        // Deactivate speed up when spacebar is released
+        deactivateSpeedUp();
       }
     };
 
@@ -101,59 +81,41 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
         clearTimeout(holdTimeoutRef.current);
       }
     };
-  }, [isSpeedUp, activateSpeedUp, deactivateSpeedUp]);
+  }, [activateSpeedUp, deactivateSpeedUp]);
 
   // Mouse event handlers for left-click hold to speed up
   const handleMouseDown = (e) => {
-    // Only respond to left click on the video element
+    // Only respond to left click
     if (e.button !== 0) return;
     
-    mouseDownTimeRef.current = Date.now();
-    isHoldingRef.current = true;
+    // Prevent default to avoid interference with native controls
+    e.preventDefault();
     
-    // Start a timer - if held for 200ms, activate speed up
-    holdTimeoutRef.current = setTimeout(() => {
-      activateSpeedUp();
-    }, 200);
+    mouseDownTimeRef.current = Date.now();
+    
+    // Immediately activate speed up
+    activateSpeedUp();
   };
 
   const handleMouseUp = (e) => {
     if (e.button !== 0) return;
     
-    const holdDuration = Date.now() - (mouseDownTimeRef.current || 0);
+    e.preventDefault();
     
-    if (holdTimeoutRef.current) {
-      clearTimeout(holdTimeoutRef.current);
-      holdTimeoutRef.current = null;
-    }
+    // Deactivate speed up
+    deactivateSpeedUp();
     
-    if (isSpeedUp) {
-      // Was holding for speed - just deactivate
-      deactivateSpeedUp();
-    } else if (holdDuration < 200) {
-      // Was a quick click - toggle play/pause
-      if (videoRef.current) {
-        if (videoRef.current.paused) {
-          videoRef.current.play();
-        } else {
-          videoRef.current.pause();
-        }
-      }
-    }
-    
-    isHoldingRef.current = false;
     mouseDownTimeRef.current = null;
   };
 
   const handleMouseLeave = () => {
-    if (isSpeedUp) {
+    if (isSpeedUpRef.current) {
       deactivateSpeedUp();
     }
     if (holdTimeoutRef.current) {
       clearTimeout(holdTimeoutRef.current);
       holdTimeoutRef.current = null;
     }
-    isHoldingRef.current = false;
   };
 
   // Set initial position
@@ -182,9 +144,6 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
     <div 
       ref={containerRef}
       className="video-player-container"
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
     >
       <video
         ref={videoRef}
@@ -192,6 +151,12 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
         src={getStreamUrl(videoId)}
         controls
         autoPlay
+      />
+      <div 
+        className="video-overlay"
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       />
       <div className={`speed-indicator ${showSpeedIndicator ? 'visible' : ''}`}>
         {speedUpMultiplier}x
