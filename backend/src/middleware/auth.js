@@ -1,47 +1,43 @@
-const jwt = require('jsonwebtoken');
+const db = require('../config/database');
 const logger = require('../utils/logger');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+// Default user for no-auth mode - fetched from database on first use
+let defaultUser = null;
 
-// Middleware that requires authentication
-const requireAuth = (req, res, next) => {
+const getDefaultUser = async () => {
+  if (defaultUser) return defaultUser;
+  
   try {
-    const authHeader = req.headers.authorization;
+    // Get the admin user from database
+    const result = await db.query(
+      'SELECT id, username, is_admin FROM users WHERE username = $1',
+      ['admin']
+    );
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Authentication required' });
+    if (result.rows.length > 0) {
+      defaultUser = result.rows[0];
+    } else {
+      // Fallback if no admin user exists
+      defaultUser = { id: null, username: 'anonymous', is_admin: false };
     }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
-    req.user = decoded;
-    next();
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired' });
-    }
-    logger.error('Auth error:', error);
-    return res.status(401).json({ error: 'Invalid token' });
+    logger.error('Error fetching default user:', error);
+    defaultUser = { id: null, username: 'anonymous', is_admin: false };
   }
+  
+  return defaultUser;
 };
 
-// Middleware that optionally sets user if token is valid
-const optionalAuth = (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const decoded = jwt.verify(token, JWT_SECRET);
-      req.user = decoded;
-    }
-    
-    next();
-  } catch (error) {
-    // Token is invalid, but we continue without user
-    next();
-  }
+// Middleware that always provides a default user (no auth required)
+const requireAuth = async (req, res, next) => {
+  req.user = await getDefaultUser();
+  next();
+};
+
+// Middleware that always provides a default user (no auth required)
+const optionalAuth = async (req, res, next) => {
+  req.user = await getDefaultUser();
+  next();
 };
 
 module.exports = { requireAuth, optionalAuth };

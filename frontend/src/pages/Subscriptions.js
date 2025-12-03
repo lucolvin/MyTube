@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import VideoCard from '../components/VideoCard';
 
 const formatSubscribers = (count) => {
@@ -12,7 +11,6 @@ const formatSubscribers = (count) => {
 };
 
 const Subscriptions = () => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const [subscriptions, setSubscriptions] = useState([]);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,8 +18,6 @@ const Subscriptions = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!isAuthenticated) return;
-      
       try {
         const subsRes = await api.get('/users/subscriptions');
         setSubscriptions(subsRes.data || []);
@@ -42,22 +38,8 @@ const Subscriptions = () => {
       }
     };
 
-    if (!authLoading) {
-      fetchData();
-    }
-  }, [isAuthenticated, authLoading]);
-
-  if (authLoading) {
-    return (
-      <div className="loading">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+    fetchData();
+  }, []);
 
   if (loading) {
     return (
