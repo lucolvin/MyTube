@@ -2,11 +2,14 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const logger = require('../utils/logger');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 
 // Get user's playlists
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
+    if (!req.user) {
+      return res.json([]);
+    }
     const result = await db.query(
       `SELECT p.*, 
               (SELECT thumbnail_path FROM videos v 

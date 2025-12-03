@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const logger = require('../utils/logger');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 
 // Get user profile
 router.get('/:id', async (req, res) => {
@@ -48,8 +48,11 @@ router.put('/profile', requireAuth, async (req, res) => {
 });
 
 // Get user's subscriptions
-router.get('/subscriptions', requireAuth, async (req, res) => {
+router.get('/subscriptions', optionalAuth, async (req, res) => {
   try {
+    if (!req.user) {
+      return res.json([]);
+    }
     const result = await db.query(
       `SELECT c.*, s.created_at as subscribed_at
        FROM subscriptions s
@@ -67,11 +70,18 @@ router.get('/subscriptions', requireAuth, async (req, res) => {
 });
 
 // Get user's watch history
-router.get('/history', requireAuth, async (req, res) => {
+router.get('/history', optionalAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
+
+    if (!req.user) {
+      return res.json({
+        videos: [],
+        pagination: { page, limit, total: 0, totalPages: 0 }
+      });
+    }
 
     const result = await db.query(
       `SELECT v.*, c.name as channel_name, wh.watched_at, wh.last_position, wh.completed
@@ -116,11 +126,15 @@ router.delete('/history', requireAuth, async (req, res) => {
 });
 
 // Get user's liked videos
-router.get('/liked', requireAuth, async (req, res) => {
+router.get('/liked', optionalAuth, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const offset = (page - 1) * limit;
+
+    if (!req.user) {
+      return res.json([]);
+    }
 
     const result = await db.query(
       `SELECT v.*, c.name as channel_name, vr.created_at as liked_at
@@ -141,8 +155,11 @@ router.get('/liked', requireAuth, async (req, res) => {
 });
 
 // Get watch later list
-router.get('/watch-later', requireAuth, async (req, res) => {
+router.get('/watch-later', optionalAuth, async (req, res) => {
   try {
+    if (!req.user) {
+      return res.json([]);
+    }
     const result = await db.query(
       `SELECT v.*, c.name as channel_name, wl.added_at
        FROM watch_later wl

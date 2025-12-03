@@ -227,13 +227,27 @@ router.get('/:id/stream', async (req, res) => {
 });
 
 // Like/dislike video
-router.post('/:id/react', requireAuth, async (req, res) => {
+// Allow unauthenticated users to no-op react (return counts only)
+router.post('/:id/react', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { reaction } = req.body; // 'like', 'dislike', or null to remove
 
     if (reaction && !['like', 'dislike'].includes(reaction)) {
       return res.status(400).json({ error: 'Invalid reaction type' });
+    }
+
+    if (!req.user) {
+      // Without a user, just return current counts and null reaction
+      const updated = await db.query(
+        'SELECT like_count, dislike_count FROM videos WHERE id = $1',
+        [id]
+      );
+      return res.json({
+        like_count: updated.rows[0]?.like_count || 0,
+        dislike_count: updated.rows[0]?.dislike_count || 0,
+        user_reaction: null
+      });
     }
 
     const client = await db.getClient();
@@ -317,18 +331,21 @@ router.post('/:id/react', requireAuth, async (req, res) => {
 });
 
 // Update watch history
-router.post('/:id/watch', requireAuth, async (req, res) => {
+// Allow unauthenticated users: no-op success response
+router.post('/:id/watch', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { position, completed } = req.body;
 
-    await db.query(
-      `INSERT INTO watch_history (user_id, video_id, last_position, completed, watched_at)
-       VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT (user_id, video_id)
-       DO UPDATE SET last_position = $3, completed = COALESCE($4, watch_history.completed), watched_at = NOW()`,
-      [req.user.id, id, position || 0, completed || false]
-    );
+    if (req.user) {
+      await db.query(
+        `INSERT INTO watch_history (user_id, video_id, last_position, completed, watched_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (user_id, video_id)
+         DO UPDATE SET last_position = $3, completed = COALESCE($4, watch_history.completed), watched_at = NOW()`,
+        [req.user.id, id, position || 0, completed || false]
+      );
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -338,9 +355,14 @@ router.post('/:id/watch', requireAuth, async (req, res) => {
 });
 
 // Get watch history position for resume
-router.get('/:id/position', requireAuth, async (req, res) => {
+// Allow unauthenticated users: default position 0
+router.get('/:id/position', optionalAuth, async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!req.user) {
+      return res.json({ position: 0 });
+    }
 
     const result = await db.query(
       'SELECT last_position FROM watch_history WHERE user_id = $1 AND video_id = $2',
