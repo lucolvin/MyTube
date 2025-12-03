@@ -261,29 +261,19 @@ router.post('/:id/watch', async (req, res) => {
     const { id } = req.params;
     const { position, completed } = req.body;
 
-    // Store watch history without user association
+    // Store watch history without user association - use video_id unique constraint
     await db.query(
       `INSERT INTO watch_history (video_id, last_position, completed, watched_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT ON CONSTRAINT watch_history_video_unique
+       ON CONFLICT (video_id)
        DO UPDATE SET last_position = $2, completed = COALESCE($3, watch_history.completed), watched_at = NOW()`,
       [id, position || 0, completed || false]
     );
 
     res.json({ success: true });
   } catch (error) {
-    // If the constraint doesn't exist, just insert
-    try {
-      await db.query(
-        `INSERT INTO watch_history (video_id, last_position, completed, watched_at)
-         VALUES ($1, $2, $3, NOW())`,
-        [id, position || 0, completed || false]
-      );
-      res.json({ success: true });
-    } catch (innerError) {
-      logger.error('Error updating watch history:', innerError);
-      res.status(500).json({ error: 'Failed to update watch history' });
-    }
+    logger.error('Error updating watch history:', error);
+    res.status(500).json({ error: 'Failed to update watch history' });
   }
 });
 

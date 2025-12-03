@@ -14,7 +14,6 @@ const redis = require('./config/redis');
 // Routes
 const videoRoutes = require('./routes/videos');
 const channelRoutes = require('./routes/channels');
-const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const commentRoutes = require('./routes/comments');
 const playlistRoutes = require('./routes/playlists');
@@ -81,10 +80,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// API Routes
+// API Routes (no auth routes - authentication removed)
 app.use('/api/videos', videoRoutes);
 app.use('/api/channels', channelRoutes);
-app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/playlists', playlistRoutes);
