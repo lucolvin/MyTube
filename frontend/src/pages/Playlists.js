@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import { FiList, FiPlus, FiTrash2 } from 'react-icons/fi';
 
 const Playlists = () => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -14,8 +12,6 @@ const Playlists = () => {
 
   useEffect(() => {
     const fetchPlaylists = async () => {
-      if (!isAuthenticated) return;
-      
       try {
         const response = await api.get('/playlists');
         setPlaylists(response.data || []);
@@ -26,10 +22,8 @@ const Playlists = () => {
       }
     };
 
-    if (!authLoading) {
-      fetchPlaylists();
-    }
-  }, [isAuthenticated, authLoading]);
+    fetchPlaylists();
+  }, []);
 
   const handleCreatePlaylist = async (e) => {
     e.preventDefault();
@@ -59,18 +53,6 @@ const Playlists = () => {
       console.error('Error deleting playlist:', err);
     }
   };
-
-  if (authLoading) {
-    return (
-      <div className="loading">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
 
   if (loading) {
     return (

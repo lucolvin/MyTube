@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import VideoCard from '../components/VideoCard';
 import { FiThumbsUp } from 'react-icons/fi';
 
 const LikedVideos = () => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchLikedVideos = async () => {
-      if (!isAuthenticated) return;
-      
       try {
         const response = await api.get('/users/liked');
         setVideos(response.data || []);
@@ -24,22 +19,8 @@ const LikedVideos = () => {
       }
     };
 
-    if (!authLoading) {
-      fetchLikedVideos();
-    }
-  }, [isAuthenticated, authLoading]);
-
-  if (authLoading) {
-    return (
-      <div className="loading">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+    fetchLikedVideos();
+  }, []);
 
   if (loading) {
     return (

@@ -2,10 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const logger = require('../utils/logger');
-const { requireAuth, optionalAuth } = require('../middleware/auth');
 
 // Get comments for a video
-router.get('/video/:videoId', optionalAuth, async (req, res) => {
+router.get('/video/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
     const page = parseInt(req.query.page) || 1;
@@ -15,10 +14,9 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
 
     // Get top-level comments
     const result = await db.query(
-      `SELECT c.*, u.username, u.display_name, u.avatar_url,
+      `SELECT c.*, 
               (SELECT COUNT(*) FROM comments WHERE parent_id = c.id) as reply_count
        FROM comments c
-       JOIN users u ON c.user_id = u.id
        WHERE c.video_id = $1 AND c.parent_id IS NULL
        ORDER BY c.created_at ${sort}
        LIMIT $2 OFFSET $3`,
@@ -29,21 +27,6 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
       'SELECT COUNT(*) FROM comments WHERE video_id = $1 AND parent_id IS NULL',
       [videoId]
     );
-
-    // Get user's likes on these comments if authenticated
-    if (req.user) {
-      const commentIds = result.rows.map(c => c.id);
-      if (commentIds.length > 0) {
-        const likesResult = await db.query(
-          'SELECT comment_id FROM comment_reactions WHERE user_id = $1 AND comment_id = ANY($2)',
-          [req.user.id, commentIds]
-        );
-        const likedIds = new Set(likesResult.rows.map(r => r.comment_id));
-        result.rows.forEach(comment => {
-          comment.user_liked = likedIds.has(comment.id);
-        });
-      }
-    }
 
     res.json({
       comments: result.rows,
@@ -61,14 +44,13 @@ router.get('/video/:videoId', optionalAuth, async (req, res) => {
 });
 
 // Get replies to a comment
-router.get('/:id/replies', optionalAuth, async (req, res) => {
+router.get('/:id/replies', async (req, res) => {
   try {
     const { id } = req.params;
 
     const result = await db.query(
-      `SELECT c.*, u.username, u.display_name, u.avatar_url
+      `SELECT c.*
        FROM comments c
-       JOIN users u ON c.user_id = u.id
        WHERE c.parent_id = $1
        ORDER BY c.created_at ASC`,
       [id]
@@ -81,11 +63,11 @@ router.get('/:id/replies', optionalAuth, async (req, res) => {
   }
 });
 
-// Add a comment
-router.post('/video/:videoId', requireAuth, async (req, res) => {
+// Add a comment (no user association)
+router.post('/video/:videoId', async (req, res) => {
   try {
     const { videoId } = req.params;
-    const { content, parent_id } = req.body;
+    const { content, parent_id, author_name } = req.body;
 
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ error: 'Comment content is required' });
@@ -118,50 +100,27 @@ router.post('/video/:videoId', requireAuth, async (req, res) => {
     }
 
     const result = await db.query(
-      `INSERT INTO comments (video_id, user_id, parent_id, content)
+      `INSERT INTO comments (video_id, parent_id, content, author_name)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [videoId, req.user.id, parent_id || null, content.trim()]
+      [videoId, parent_id || null, content.trim(), author_name || 'Anonymous']
     );
 
-    // Get user info
-    const userResult = await db.query(
-      'SELECT username, display_name, avatar_url FROM users WHERE id = $1',
-      [req.user.id]
-    );
-
-    res.status(201).json({
-      ...result.rows[0],
-      ...userResult.rows[0]
-    });
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     logger.error('Error adding comment:', error);
     res.status(500).json({ error: 'Failed to add comment' });
   }
 });
 
-// Update a comment
-router.put('/:id', requireAuth, async (req, res) => {
+// Update a comment (no ownership check)
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
 
     if (!content || content.trim().length === 0) {
       return res.status(400).json({ error: 'Comment content is required' });
-    }
-
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT user_id FROM comments WHERE id = $1',
-      [id]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ error: 'Comment not found' });
-    }
-
-    if (existing.rows[0].user_id !== req.user.id && !req.user.is_admin) {
-      return res.status(403).json({ error: 'Not authorized to edit this comment' });
     }
 
     const result = await db.query(
@@ -172,6 +131,10 @@ router.put('/:id', requireAuth, async (req, res) => {
       [content.trim(), id]
     );
 
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
     res.json(result.rows[0]);
   } catch (error) {
     logger.error('Error updating comment:', error);
@@ -179,26 +142,19 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete a comment
-router.delete('/:id', requireAuth, async (req, res) => {
+// Delete a comment (no ownership check)
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT user_id FROM comments WHERE id = $1',
+    const result = await db.query(
+      'DELETE FROM comments WHERE id = $1 RETURNING id',
       [id]
     );
 
-    if (existing.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Comment not found' });
     }
-
-    if (existing.rows[0].user_id !== req.user.id && !req.user.is_admin) {
-      return res.status(403).json({ error: 'Not authorized to delete this comment' });
-    }
-
-    await db.query('DELETE FROM comments WHERE id = $1', [id]);
 
     res.json({ message: 'Comment deleted' });
   } catch (error) {
@@ -207,38 +163,15 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Like a comment
-router.post('/:id/like', requireAuth, async (req, res) => {
+// Like a comment (just increment count)
+router.post('/:id/like', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if already liked
-    const existing = await db.query(
-      'SELECT id FROM comment_reactions WHERE comment_id = $1 AND user_id = $2',
-      [id, req.user.id]
+    await db.query(
+      'UPDATE comments SET like_count = like_count + 1 WHERE id = $1',
+      [id]
     );
-
-    if (existing.rows.length > 0) {
-      // Unlike
-      await db.query(
-        'DELETE FROM comment_reactions WHERE comment_id = $1 AND user_id = $2',
-        [id, req.user.id]
-      );
-      await db.query(
-        'UPDATE comments SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1',
-        [id]
-      );
-    } else {
-      // Like
-      await db.query(
-        'INSERT INTO comment_reactions (comment_id, user_id) VALUES ($1, $2)',
-        [id, req.user.id]
-      );
-      await db.query(
-        'UPDATE comments SET like_count = like_count + 1 WHERE id = $1',
-        [id]
-      );
-    }
 
     const result = await db.query(
       'SELECT like_count FROM comments WHERE id = $1',
@@ -246,7 +179,7 @@ router.post('/:id/like', requireAuth, async (req, res) => {
     );
 
     res.json({
-      liked: existing.rows.length === 0,
+      liked: true,
       like_count: result.rows[0]?.like_count || 0
     });
   } catch (error) {

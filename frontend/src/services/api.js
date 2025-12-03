@@ -9,24 +9,11 @@ const api = axios.create({
   }
 });
 
-// Add token from localStorage if it exists
-const token = localStorage.getItem('token');
-if (token) {
-  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-}
-
-// Response interceptor for error handling
+// Simple error handling - no authentication required
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      delete api.defaults.headers.common['Authorization'];
-      // Optionally redirect to login
-      if (window.location.pathname !== '/login') {
-        // window.location.href = '/login';
-      }
-    }
+    console.error('API Error:', error.response?.data?.error || error.message);
     return Promise.reject(error);
   }
 );

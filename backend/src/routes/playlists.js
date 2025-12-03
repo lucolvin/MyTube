@@ -2,14 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const logger = require('../utils/logger');
-const { requireAuth, optionalAuth } = require('../middleware/auth');
 
-// Get user's playlists
-router.get('/', optionalAuth, async (req, res) => {
+// Get all playlists (no user filtering)
+router.get('/', async (req, res) => {
   try {
-    if (!req.user) {
-      return res.json([]);
-    }
     const result = await db.query(
       `SELECT p.*, 
               (SELECT thumbnail_path FROM videos v 
@@ -17,38 +13,12 @@ router.get('/', optionalAuth, async (req, res) => {
                WHERE pv.playlist_id = p.id 
                ORDER BY pv.position LIMIT 1) as thumbnail
        FROM playlists p
-       WHERE p.user_id = $1
-       ORDER BY p.updated_at DESC`,
-      [req.user.id]
+       ORDER BY p.updated_at DESC`
     );
 
     res.json(result.rows);
   } catch (error) {
     logger.error('Error fetching playlists:', error);
-    res.status(500).json({ error: 'Failed to fetch playlists' });
-  }
-});
-
-// Get public playlists for a user
-router.get('/user/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    const result = await db.query(
-      `SELECT p.*,
-              (SELECT thumbnail_path FROM videos v 
-               JOIN playlist_videos pv ON v.id = pv.video_id 
-               WHERE pv.playlist_id = p.id 
-               ORDER BY pv.position LIMIT 1) as thumbnail
-       FROM playlists p
-       WHERE p.user_id = $1 AND p.is_public = true
-       ORDER BY p.updated_at DESC`,
-      [userId]
-    );
-
-    res.json(result.rows);
-  } catch (error) {
-    logger.error('Error fetching user playlists:', error);
     res.status(500).json({ error: 'Failed to fetch playlists' });
   }
 });
@@ -59,9 +29,8 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const result = await db.query(
-      `SELECT p.*, u.username, u.display_name
+      `SELECT p.*
        FROM playlists p
-       JOIN users u ON p.user_id = u.id
        WHERE p.id = $1`,
       [id]
     );
@@ -93,8 +62,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create playlist
-router.post('/', requireAuth, async (req, res) => {
+// Create playlist (no user association)
+router.post('/', async (req, res) => {
   try {
     const { title, description, is_public } = req.body;
 
@@ -103,10 +72,10 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     const result = await db.query(
-      `INSERT INTO playlists (user_id, title, description, is_public)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO playlists (title, description, is_public)
+       VALUES ($1, $2, $3)
        RETURNING *`,
-      [req.user.id, title.trim(), description || '', is_public !== false]
+      [title.trim(), description || '', is_public !== false]
     );
 
     res.status(201).json(result.rows[0]);
@@ -116,25 +85,11 @@ router.post('/', requireAuth, async (req, res) => {
   }
 });
 
-// Update playlist
-router.put('/:id', requireAuth, async (req, res) => {
+// Update playlist (no ownership check)
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, is_public } = req.body;
-
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
-      [id]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ error: 'Playlist not found' });
-    }
-
-    if (existing.rows[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
 
     const result = await db.query(
       `UPDATE playlists 
@@ -146,6 +101,10 @@ router.put('/:id', requireAuth, async (req, res) => {
       [title, description, is_public, id]
     );
 
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
     res.json(result.rows[0]);
   } catch (error) {
     logger.error('Error updating playlist:', error);
@@ -153,26 +112,19 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete playlist
-router.delete('/:id', requireAuth, async (req, res) => {
+// Delete playlist (no ownership check)
+router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
+    const result = await db.query(
+      'DELETE FROM playlists WHERE id = $1 RETURNING id',
       [id]
     );
 
-    if (existing.rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found' });
     }
-
-    if (existing.rows[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
-
-    await db.query('DELETE FROM playlists WHERE id = $1', [id]);
 
     res.json({ message: 'Playlist deleted' });
   } catch (error) {
@@ -181,8 +133,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Add video to playlist
-router.post('/:id/videos', requireAuth, async (req, res) => {
+// Add video to playlist (no ownership check)
+router.post('/:id/videos', async (req, res) => {
   try {
     const { id } = req.params;
     const { video_id } = req.body;
@@ -191,18 +143,14 @@ router.post('/:id/videos', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Video ID is required' });
     }
 
-    // Verify ownership
+    // Verify playlist exists
     const existing = await db.query(
-      'SELECT user_id, video_count FROM playlists WHERE id = $1',
+      'SELECT id FROM playlists WHERE id = $1',
       [id]
     );
 
     if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found' });
-    }
-
-    if (existing.rows[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
     }
 
     // Get next position
@@ -233,24 +181,10 @@ router.post('/:id/videos', requireAuth, async (req, res) => {
   }
 });
 
-// Remove video from playlist
-router.delete('/:id/videos/:videoId', requireAuth, async (req, res) => {
+// Remove video from playlist (no ownership check)
+router.delete('/:id/videos/:videoId', async (req, res) => {
   try {
     const { id, videoId } = req.params;
-
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
-      [id]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ error: 'Playlist not found' });
-    }
-
-    if (existing.rows[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
-    }
 
     await db.query(
       'DELETE FROM playlist_videos WHERE playlist_id = $1 AND video_id = $2',
@@ -272,28 +206,14 @@ router.delete('/:id/videos/:videoId', requireAuth, async (req, res) => {
   }
 });
 
-// Reorder playlist videos
-router.put('/:id/reorder', requireAuth, async (req, res) => {
+// Reorder playlist videos (no ownership check)
+router.put('/:id/reorder', async (req, res) => {
   try {
     const { id } = req.params;
-    const { video_ids } = req.body; // Array of video IDs in new order
+    const { video_ids } = req.body;
 
     if (!Array.isArray(video_ids)) {
       return res.status(400).json({ error: 'video_ids must be an array' });
-    }
-
-    // Verify ownership
-    const existing = await db.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
-      [id]
-    );
-
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ error: 'Playlist not found' });
-    }
-
-    if (existing.rows[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: 'Not authorized' });
     }
 
     // Update positions

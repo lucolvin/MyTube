@@ -1,18 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import VideoCard from '../components/VideoCard';
 
 const History = () => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!isAuthenticated) return;
-      
       try {
         const response = await api.get('/users/history');
         setHistory(response.data.videos || []);
@@ -23,22 +18,8 @@ const History = () => {
       }
     };
 
-    if (!authLoading) {
-      fetchHistory();
-    }
-  }, [isAuthenticated, authLoading]);
-
-  if (authLoading) {
-    return (
-      <div className="loading">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
+    fetchHistory();
+  }, []);
 
   if (loading) {
     return (

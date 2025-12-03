@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import VideoCard from '../components/VideoCard';
 import { FiClock, FiTrash2 } from 'react-icons/fi';
 
 const WatchLater = () => {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchWatchLater = async () => {
-      if (!isAuthenticated) return;
-      
       try {
         const response = await api.get('/users/watch-later');
         setVideos(response.data || []);
@@ -24,10 +19,8 @@ const WatchLater = () => {
       }
     };
 
-    if (!authLoading) {
-      fetchWatchLater();
-    }
-  }, [isAuthenticated, authLoading]);
+    fetchWatchLater();
+  }, []);
 
   const handleRemove = async (videoId) => {
     try {
@@ -37,18 +30,6 @@ const WatchLater = () => {
       console.error('Error removing from watch later:', err);
     }
   };
-
-  if (authLoading) {
-    return (
-      <div className="loading">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
 
   if (loading) {
     return (
