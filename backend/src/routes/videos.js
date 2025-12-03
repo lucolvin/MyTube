@@ -5,10 +5,9 @@ const path = require('path');
 const db = require('../config/database');
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
-const { optionalAuth, requireAuth } = require('../middleware/auth');
 
 // Get all videos with pagination
-router.get('/', optionalAuth, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 20, 100);
@@ -111,7 +110,7 @@ router.get('/latest', async (req, res) => {
 });
 
 // Get single video by ID
-router.get('/:id', optionalAuth, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -141,20 +140,10 @@ router.get('/:id', optionalAuth, async (req, res) => {
       [video.channel_id, id]
     );
 
-    // If user is authenticated, get their reaction
-    let userReaction = null;
-    if (req.user) {
-      const reactionResult = await db.query(
-        'SELECT reaction_type FROM video_reactions WHERE video_id = $1 AND user_id = $2',
-        [id, req.user.id]
-      );
-      userReaction = reactionResult.rows[0]?.reaction_type || null;
-    }
-
     res.json({
       ...video,
       related_videos: related.rows,
-      user_reaction: userReaction
+      user_reaction: null
     });
   } catch (error) {
     logger.error('Error fetching video:', error);
@@ -226,147 +215,86 @@ router.get('/:id/stream', async (req, res) => {
   }
 });
 
-// Like/dislike video
-// Allow unauthenticated users to no-op react (return counts only)
-router.post('/:id/react', optionalAuth, async (req, res) => {
+// Like/dislike video (directly updates video counts, no user tracking)
+router.post('/:id/react', async (req, res) => {
   try {
     const { id } = req.params;
-    const { reaction } = req.body; // 'like', 'dislike', or null to remove
+    const { reaction } = req.body; // 'like', 'dislike', or null
 
     if (reaction && !['like', 'dislike'].includes(reaction)) {
       return res.status(400).json({ error: 'Invalid reaction type' });
     }
 
-    if (!req.user) {
-      // Without a user, just return current counts and null reaction
-      const updated = await db.query(
-        'SELECT like_count, dislike_count FROM videos WHERE id = $1',
+    // Simply update the count directly
+    if (reaction === 'like') {
+      await db.query(
+        'UPDATE videos SET like_count = like_count + 1 WHERE id = $1',
         [id]
       );
-      return res.json({
-        like_count: updated.rows[0]?.like_count || 0,
-        dislike_count: updated.rows[0]?.dislike_count || 0,
-        user_reaction: null
-      });
-    }
-
-    const client = await db.getClient();
-    try {
-      await client.query('BEGIN');
-
-      // Get current reaction
-      const current = await client.query(
-        'SELECT reaction_type FROM video_reactions WHERE video_id = $1 AND user_id = $2',
-        [id, req.user.id]
-      );
-
-      const currentReaction = current.rows[0]?.reaction_type;
-
-      // Remove old reaction counts
-      if (currentReaction === 'like') {
-        await client.query(
-          'UPDATE videos SET like_count = GREATEST(like_count - 1, 0) WHERE id = $1',
-          [id]
-        );
-      } else if (currentReaction === 'dislike') {
-        await client.query(
-          'UPDATE videos SET dislike_count = GREATEST(dislike_count - 1, 0) WHERE id = $1',
-          [id]
-        );
-      }
-
-      if (reaction) {
-        // Upsert reaction
-        await client.query(
-          `INSERT INTO video_reactions (video_id, user_id, reaction_type)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (video_id, user_id)
-           DO UPDATE SET reaction_type = $3`,
-          [id, req.user.id, reaction]
-        );
-
-        // Update count
-        if (reaction === 'like') {
-          await client.query(
-            'UPDATE videos SET like_count = like_count + 1 WHERE id = $1',
-            [id]
-          );
-        } else {
-          await client.query(
-            'UPDATE videos SET dislike_count = dislike_count + 1 WHERE id = $1',
-            [id]
-          );
-        }
-      } else {
-        // Remove reaction
-        await client.query(
-          'DELETE FROM video_reactions WHERE video_id = $1 AND user_id = $2',
-          [id, req.user.id]
-        );
-      }
-
-      await client.query('COMMIT');
-
-      // Get updated counts
-      const updated = await db.query(
-        'SELECT like_count, dislike_count FROM videos WHERE id = $1',
+    } else if (reaction === 'dislike') {
+      await db.query(
+        'UPDATE videos SET dislike_count = dislike_count + 1 WHERE id = $1',
         [id]
       );
-
-      res.json({
-        like_count: updated.rows[0].like_count,
-        dislike_count: updated.rows[0].dislike_count,
-        user_reaction: reaction
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
+
+    // Get updated counts
+    const updated = await db.query(
+      'SELECT like_count, dislike_count FROM videos WHERE id = $1',
+      [id]
+    );
+
+    res.json({
+      like_count: updated.rows[0]?.like_count || 0,
+      dislike_count: updated.rows[0]?.dislike_count || 0,
+      user_reaction: reaction
+    });
   } catch (error) {
     logger.error('Error reacting to video:', error);
     res.status(500).json({ error: 'Failed to react to video' });
   }
 });
 
-// Update watch history
-// Allow unauthenticated users: no-op success response
-router.post('/:id/watch', optionalAuth, async (req, res) => {
+// Update watch history (global, not per-user)
+router.post('/:id/watch', async (req, res) => {
   try {
     const { id } = req.params;
     const { position, completed } = req.body;
 
-    if (req.user) {
-      await db.query(
-        `INSERT INTO watch_history (user_id, video_id, last_position, completed, watched_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (user_id, video_id)
-         DO UPDATE SET last_position = $3, completed = COALESCE($4, watch_history.completed), watched_at = NOW()`,
-        [req.user.id, id, position || 0, completed || false]
-      );
-    }
+    // Store watch history without user association
+    await db.query(
+      `INSERT INTO watch_history (video_id, last_position, completed, watched_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT ON CONSTRAINT watch_history_video_unique
+       DO UPDATE SET last_position = $2, completed = COALESCE($3, watch_history.completed), watched_at = NOW()`,
+      [id, position || 0, completed || false]
+    );
 
     res.json({ success: true });
   } catch (error) {
-    logger.error('Error updating watch history:', error);
-    res.status(500).json({ error: 'Failed to update watch history' });
+    // If the constraint doesn't exist, just insert
+    try {
+      await db.query(
+        `INSERT INTO watch_history (video_id, last_position, completed, watched_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [id, position || 0, completed || false]
+      );
+      res.json({ success: true });
+    } catch (innerError) {
+      logger.error('Error updating watch history:', innerError);
+      res.status(500).json({ error: 'Failed to update watch history' });
+    }
   }
 });
 
-// Get watch history position for resume
-// Allow unauthenticated users: default position 0
-router.get('/:id/position', optionalAuth, async (req, res) => {
+// Get watch history position for resume (global)
+router.get('/:id/position', async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!req.user) {
-      return res.json({ position: 0 });
-    }
-
     const result = await db.query(
-      'SELECT last_position FROM watch_history WHERE user_id = $1 AND video_id = $2',
-      [req.user.id, id]
+      'SELECT last_position FROM watch_history WHERE video_id = $1 ORDER BY watched_at DESC LIMIT 1',
+      [id]
     );
 
     res.json({

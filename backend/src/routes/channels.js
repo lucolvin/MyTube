@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const logger = require('../utils/logger');
-const { optionalAuth, requireAuth } = require('../middleware/auth');
 
 // Get all channels
 router.get('/', async (req, res) => {
@@ -38,7 +37,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get single channel by ID
-router.get('/:id', optionalAuth, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -56,19 +55,15 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     const channel = result.rows[0];
 
-    // Check if user is subscribed
-    let isSubscribed = false;
-    if (req.user) {
-      const subResult = await db.query(
-        'SELECT id FROM subscriptions WHERE user_id = $1 AND channel_id = $2',
-        [req.user.id, id]
-      );
-      isSubscribed = subResult.rows.length > 0;
-    }
+    // Check if subscribed (check if any subscription exists for this channel)
+    const subResult = await db.query(
+      'SELECT id FROM subscriptions WHERE channel_id = $1 LIMIT 1',
+      [id]
+    );
 
     res.json({
       ...channel,
-      is_subscribed: isSubscribed
+      is_subscribed: subResult.rows.length > 0
     });
   } catch (error) {
     logger.error('Error fetching channel:', error);
@@ -126,15 +121,15 @@ router.get('/:id/videos', async (req, res) => {
   }
 });
 
-// Subscribe to channel
-router.post('/:id/subscribe', requireAuth, async (req, res) => {
+// Subscribe to channel (no user association)
+router.post('/:id/subscribe', async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if already subscribed
+    // Check if already subscribed (global check)
     const existing = await db.query(
-      'SELECT id FROM subscriptions WHERE user_id = $1 AND channel_id = $2',
-      [req.user.id, id]
+      'SELECT id FROM subscriptions WHERE channel_id = $1 LIMIT 1',
+      [id]
     );
 
     if (existing.rows.length > 0) {
@@ -142,8 +137,8 @@ router.post('/:id/subscribe', requireAuth, async (req, res) => {
     }
 
     await db.query(
-      'INSERT INTO subscriptions (user_id, channel_id) VALUES ($1, $2)',
-      [req.user.id, id]
+      'INSERT INTO subscriptions (channel_id) VALUES ($1)',
+      [id]
     );
 
     await db.query(
@@ -167,13 +162,13 @@ router.post('/:id/subscribe', requireAuth, async (req, res) => {
 });
 
 // Unsubscribe from channel
-router.delete('/:id/subscribe', requireAuth, async (req, res) => {
+router.delete('/:id/subscribe', async (req, res) => {
   try {
     const { id } = req.params;
 
     const result = await db.query(
-      'DELETE FROM subscriptions WHERE user_id = $1 AND channel_id = $2 RETURNING id',
-      [req.user.id, id]
+      'DELETE FROM subscriptions WHERE channel_id = $1 RETURNING id',
+      [id]
     );
 
     if (result.rows.length === 0) {
@@ -200,15 +195,11 @@ router.delete('/:id/subscribe', requireAuth, async (req, res) => {
   }
 });
 
-// Update channel info (admin only)
-router.put('/:id', requireAuth, async (req, res) => {
+// Update channel info
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { description, avatar_url, banner_url } = req.body;
-
-    if (!req.user.is_admin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
 
     const result = await db.query(
       `UPDATE channels 
