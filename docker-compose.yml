@@ -60,7 +60,7 @@ services:
       - ${MEDIA_PATH:-./media}:/media:ro
       - thumbnails_data:/thumbnails
     ports:
-      - "3001:3001"
+      - "7979:3001"
     depends_on:
       db:
         condition: service_healthy
