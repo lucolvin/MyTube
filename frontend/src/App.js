@@ -9,6 +9,9 @@ import History from './pages/History';
 import Subscriptions from './pages/Subscriptions';
 import Library from './pages/Library';
 import Playlist from './pages/Playlist';
+import LikedVideos from './pages/LikedVideos';
+import WatchLater from './pages/WatchLater';
+import Playlists from './pages/Playlists';
 // Auth pages removed
 import './styles/App.css';
 
@@ -24,6 +27,9 @@ function App() {
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/library" element={<Library />} />
         <Route path="/playlist/:id" element={<Playlist />} />
+        <Route path="/liked" element={<LikedVideos />} />
+        <Route path="/watch-later" element={<WatchLater />} />
+        <Route path="/playlists" element={<Playlists />} />
       </Routes>
     </Layout>
   );

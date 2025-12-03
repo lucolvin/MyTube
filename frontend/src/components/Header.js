@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiMenu, FiSearch, FiUser, FiLogOut, FiSettings } from 'react-icons/fi';
+import { FiMenu, FiSearch } from 'react-icons/fi';
 import { FaYoutube } from 'react-icons/fa';
 // Auth removed; no user context
 
 const Header = ({ onMenuClick }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
   const navigate = useNavigate();
 
   const handleSearch = (e) => {
