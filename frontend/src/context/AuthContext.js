@@ -7,17 +7,17 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Check for existing token on mount
+  // Check for existing token on mount and validate it
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem('token');
       if (token) {
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        // Token header is already set by api.js on module load
         try {
           const response = await api.get('/auth/me');
           setUser(response.data);
         } catch (error) {
-          // Token is invalid, clear it
+          // Token is invalid, clear it (api.js interceptor handles header cleanup on 401)
           localStorage.removeItem('token');
           delete api.defaults.headers.common['Authorization'];
         }
