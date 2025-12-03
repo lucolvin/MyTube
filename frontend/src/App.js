@@ -12,7 +12,8 @@ import Playlist from './pages/Playlist';
 import LikedVideos from './pages/LikedVideos';
 import WatchLater from './pages/WatchLater';
 import Playlists from './pages/Playlists';
-// Auth pages removed
+import Login from './pages/Login';
+import Register from './pages/Register';
 import './styles/App.css';
 
 function App() {
@@ -30,6 +31,8 @@ function App() {
         <Route path="/liked" element={<LikedVideos />} />
         <Route path="/watch-later" element={<WatchLater />} />
         <Route path="/playlists" element={<Playlists />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
       </Routes>
     </Layout>
   );
