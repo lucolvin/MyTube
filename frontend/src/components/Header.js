@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiMenu, FiSearch, FiUser, FiLogOut, FiSettings } from 'react-icons/fi';
 import { FaYoutube } from 'react-icons/fa';
-import { useAuth } from '../context/AuthContext';
+// Auth removed; no user context
 
 const Header = ({ onMenuClick }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
-  const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const handleSearch = (e) => {
@@ -17,11 +16,7 @@ const Header = ({ onMenuClick }) => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    setShowDropdown(false);
-    navigate('/');
-  };
+  // No authentication; no logout
 
   return (
     <header className="header">
@@ -51,33 +46,7 @@ const Header = ({ onMenuClick }) => {
       </div>
 
       <div className="header-right">
-        {isAuthenticated ? (
-          <div className="user-dropdown">
-            <div 
-              className="user-avatar"
-              onClick={() => setShowDropdown(!showDropdown)}
-            >
-              {user?.display_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'U'}
-            </div>
-            {showDropdown && (
-              <div className="dropdown-menu">
-                <div className="dropdown-item">
-                  <FiUser />
-                  <span>{user?.display_name || user?.username}</span>
-                </div>
-                <div className="dropdown-divider" />
-                <button className="dropdown-item" onClick={() => { navigate('/library'); setShowDropdown(false); }}>
-                  <FiSettings />
-                  <span>Your Library</span>
-                </button>
-                <button className="dropdown-item" onClick={handleLogout}>
-                  <FiLogOut />
-                  <span>Sign out</span>
-                </button>
-              </div>
-            )}
-          </div>
-        ) : null}
+        {/* No auth UI */}
       </div>
     </header>
   );

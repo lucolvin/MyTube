@@ -9,8 +9,7 @@ import History from './pages/History';
 import Subscriptions from './pages/Subscriptions';
 import Library from './pages/Library';
 import Playlist from './pages/Playlist';
-import Login from './pages/Login';
-import Register from './pages/Register';
+// Auth pages removed
 import './styles/App.css';
 
 function App() {
@@ -25,8 +24,6 @@ function App() {
         <Route path="/subscriptions" element={<Subscriptions />} />
         <Route path="/library" element={<Library />} />
         <Route path="/playlist/:id" element={<Playlist />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
       </Routes>
     </Layout>
   );
