@@ -3,6 +3,7 @@ import { getStreamUrl } from '../services/api';
 
 /**
  * VideoPlayer component with YouTube-like features:
+ * - Tap spacebar or left-click to pause/play
  * - Hold spacebar or left-click to speed up playback (2x speed)
  * - Standard video controls
  * - Resume from last position
@@ -15,7 +16,11 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
   const speedUpMultiplier = 2;
   const holdTimeoutRef = useRef(null);
   const isSpeedUpRef = useRef(false);
+  const keyDownTimeRef = useRef(null);
   const mouseDownTimeRef = useRef(null);
+  
+  // Threshold in milliseconds to differentiate tap from hold
+  const HOLD_THRESHOLD = 200;
 
   // Handle speed up activation
   const activateSpeedUp = useCallback(() => {
@@ -29,7 +34,7 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
 
   // Handle speed up deactivation
   const deactivateSpeedUp = useCallback(() => {
-    if (videoRef.current) {
+    if (videoRef.current && isSpeedUpRef.current) {
       videoRef.current.playbackRate = normalSpeedRef.current;
     }
     isSpeedUpRef.current = false;
@@ -40,7 +45,18 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
     }
   }, []);
 
-  // Keyboard event handlers for spacebar hold to speed up
+  // Toggle play/pause
+  const togglePlayPause = useCallback(() => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  }, []);
+
+  // Keyboard event handlers for spacebar: tap to pause/play, hold to speed up
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Only respond to spacebar
@@ -52,8 +68,13 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
         
         e.preventDefault();
         
-        // Immediately activate speed up when spacebar is pressed
-        activateSpeedUp();
+        // Record the time when key was pressed
+        keyDownTimeRef.current = Date.now();
+        
+        // Start a timeout to activate speed up after hold threshold
+        holdTimeoutRef.current = setTimeout(() => {
+          activateSpeedUp();
+        }, HOLD_THRESHOLD);
       }
     };
 
@@ -66,8 +87,24 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
         
         e.preventDefault();
         
-        // Deactivate speed up when spacebar is released
-        deactivateSpeedUp();
+        // Calculate how long the key was held
+        const holdDuration = keyDownTimeRef.current ? Date.now() - keyDownTimeRef.current : 0;
+        
+        // Clear the hold timeout if it hasn't fired yet
+        if (holdTimeoutRef.current) {
+          clearTimeout(holdTimeoutRef.current);
+          holdTimeoutRef.current = null;
+        }
+        
+        // If it was a short tap (not a hold), toggle play/pause
+        if (holdDuration < HOLD_THRESHOLD && !isSpeedUpRef.current) {
+          togglePlayPause();
+        } else {
+          // Deactivate speed up if it was active
+          deactivateSpeedUp();
+        }
+        
+        keyDownTimeRef.current = null;
       }
     };
 
@@ -81,24 +118,40 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
         clearTimeout(holdTimeoutRef.current);
       }
     };
-  }, [activateSpeedUp, deactivateSpeedUp]);
+  }, [activateSpeedUp, deactivateSpeedUp, togglePlayPause]);
 
-  // Mouse event handlers for left-click hold to speed up
+  // Mouse event handlers for left-click: tap to pause/play, hold to speed up
   const handleMouseDown = (e) => {
     // Only respond to left click
     if (e.button !== 0) return;
     
     mouseDownTimeRef.current = Date.now();
     
-    // Immediately activate speed up
-    activateSpeedUp();
+    // Start a timeout to activate speed up after hold threshold
+    holdTimeoutRef.current = setTimeout(() => {
+      activateSpeedUp();
+    }, HOLD_THRESHOLD);
   };
 
   const handleMouseUp = (e) => {
     if (e.button !== 0) return;
     
-    // Deactivate speed up
-    deactivateSpeedUp();
+    // Calculate how long the mouse was held
+    const holdDuration = mouseDownTimeRef.current ? Date.now() - mouseDownTimeRef.current : 0;
+    
+    // Clear the hold timeout if it hasn't fired yet
+    if (holdTimeoutRef.current) {
+      clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = null;
+    }
+    
+    // If it was a short tap (not a hold), toggle play/pause
+    if (holdDuration < HOLD_THRESHOLD && !isSpeedUpRef.current) {
+      togglePlayPause();
+    } else {
+      // Deactivate speed up if it was active
+      deactivateSpeedUp();
+    }
     
     mouseDownTimeRef.current = null;
   };
@@ -111,6 +164,7 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
       clearTimeout(holdTimeoutRef.current);
       holdTimeoutRef.current = null;
     }
+    mouseDownTimeRef.current = null;
   };
 
   // Set initial position

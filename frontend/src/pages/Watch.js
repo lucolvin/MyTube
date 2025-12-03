@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FiThumbsUp, FiThumbsDown, FiShare2, FiFlag, FiClock } from 'react-icons/fi';
+import { FiThumbsUp, FiThumbsDown, FiShare2, FiClock, FiList, FiPlus, FiCheck } from 'react-icons/fi';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import VideoPlayer from '../components/VideoPlayer';
@@ -53,6 +53,10 @@ const Watch = () => {
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [startPosition, setStartPosition] = useState(0);
+  const [isInWatchLater, setIsInWatchLater] = useState(false);
+  const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
+  const [playlists, setPlaylists] = useState([]);
+  const [videoPlaylists, setVideoPlaylists] = useState([]);
 
   useEffect(() => {
     const fetchVideo = async () => {
@@ -73,6 +77,37 @@ const Watch = () => {
             setStartPosition(posRes.data.position || 0);
           } catch (e) {
             // Ignore errors for position
+          }
+          
+          // Check if video is in watch later
+          try {
+            const watchLaterRes = await api.get('/users/watch-later');
+            const watchLaterVideos = watchLaterRes.data || [];
+            setIsInWatchLater(watchLaterVideos.some(v => v.id === id));
+          } catch (e) {
+            // Ignore errors
+          }
+          
+          // Fetch user's playlists
+          try {
+            const playlistsRes = await api.get('/playlists');
+            setPlaylists(playlistsRes.data || []);
+            
+            // Check which playlists contain this video
+            const containingPlaylists = [];
+            for (const playlist of playlistsRes.data || []) {
+              try {
+                const playlistDetail = await api.get(`/playlists/${playlist.id}`);
+                if (playlistDetail.data.videos?.some(v => v.id === id)) {
+                  containingPlaylists.push(playlist.id);
+                }
+              } catch (e) {
+                // Ignore errors
+              }
+            }
+            setVideoPlaylists(containingPlaylists);
+          } catch (e) {
+            // Ignore errors
           }
         }
       } catch (err) {
@@ -150,6 +185,38 @@ const Watch = () => {
     }
   };
 
+  const handleWatchLater = async () => {
+    if (!isAuthenticated) return;
+    
+    try {
+      if (isInWatchLater) {
+        await api.delete(`/users/watch-later/${id}`);
+        setIsInWatchLater(false);
+      } else {
+        await api.post(`/users/watch-later/${id}`);
+        setIsInWatchLater(true);
+      }
+    } catch (err) {
+      console.error('Error updating watch later:', err);
+    }
+  };
+
+  const handleAddToPlaylist = async (playlistId) => {
+    if (!isAuthenticated) return;
+    
+    try {
+      if (videoPlaylists.includes(playlistId)) {
+        await api.delete(`/playlists/${playlistId}/videos/${id}`);
+        setVideoPlaylists(videoPlaylists.filter(p => p !== playlistId));
+      } else {
+        await api.post(`/playlists/${playlistId}/videos`, { video_id: id });
+        setVideoPlaylists([...videoPlaylists, playlistId]);
+      }
+    } catch (err) {
+      console.error('Error updating playlist:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="loading">
@@ -222,10 +289,52 @@ const Watch = () => {
                 <FiShare2 />
                 <span>Share</span>
               </button>
-              <button className="action-btn">
-                <FiClock />
-                <span>Save</span>
-              </button>
+              {isAuthenticated && (
+                <>
+                  <button 
+                    className={`action-btn ${isInWatchLater ? 'active' : ''}`}
+                    onClick={handleWatchLater}
+                    title={isInWatchLater ? 'Remove from Watch Later' : 'Add to Watch Later'}
+                  >
+                    <FiClock />
+                    <span>{isInWatchLater ? 'Saved' : 'Watch Later'}</span>
+                  </button>
+                  <div style={{ position: 'relative' }}>
+                    <button 
+                      className="action-btn"
+                      onClick={() => setShowPlaylistMenu(!showPlaylistMenu)}
+                    >
+                      <FiList />
+                      <span>Save to playlist</span>
+                    </button>
+                    {showPlaylistMenu && (
+                      <div className="playlist-dropdown">
+                        <div className="playlist-dropdown-header">Save to...</div>
+                        {playlists.length === 0 ? (
+                          <div className="playlist-dropdown-empty">
+                            No playlists yet. Create one in the Library.
+                          </div>
+                        ) : (
+                          playlists.map((playlist) => (
+                            <button
+                              key={playlist.id}
+                              className="playlist-dropdown-item"
+                              onClick={() => handleAddToPlaylist(playlist.id)}
+                            >
+                              {videoPlaylists.includes(playlist.id) ? (
+                                <FiCheck className="playlist-check" />
+                              ) : (
+                                <FiPlus className="playlist-check" />
+                              )}
+                              <span>{playlist.title}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

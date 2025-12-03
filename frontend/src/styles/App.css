@@ -263,6 +263,19 @@
   color: var(--text-secondary);
 }
 
+.sidebar-channel-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: var(--bg-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
 /* Video Grid */
 .video-grid {
   display: grid;
@@ -478,6 +491,56 @@
 .action-btn.active {
   background-color: var(--text-primary);
   color: var(--bg-primary);
+}
+
+/* Playlist Dropdown */
+.playlist-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.playlist-dropdown-header {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.playlist-dropdown-empty {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.playlist-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.playlist-dropdown-item:hover {
+  background-color: var(--bg-hover);
+}
+
+.playlist-check {
+  flex-shrink: 0;
 }
 
 .video-description {
