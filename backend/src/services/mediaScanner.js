@@ -251,9 +251,11 @@ class MediaScanner {
         logger.warn(`Could not get metadata for ${videoPath}:`, error.message);
       }
 
-      // Generate thumbnail
+      // Generate thumbnail with unique filename using crypto
+      const crypto = require('crypto');
       const videoFileName = path.basename(videoPath, path.extname(videoPath));
-      const thumbnailFileName = `${Date.now()}_${videoFileName}.jpg`;
+      const uniqueId = crypto.randomUUID();
+      const thumbnailFileName = `${uniqueId}_${videoFileName.substring(0, 50)}.jpg`;
       const thumbnailPath = path.join(this.thumbnailPath, thumbnailFileName);
 
       let thumbnailUrl = null;

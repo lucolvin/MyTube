@@ -168,11 +168,12 @@ CREATE INDEX idx_videos_description_fts ON videos USING gin(to_tsvector('english
 CREATE INDEX idx_channels_name_fts ON channels USING gin(to_tsvector('english', name));
 
 -- Create a default admin user (password: admin123 - change in production!)
+-- bcrypt hash generated with 10 rounds for password 'admin123'
 INSERT INTO users (username, email, password_hash, display_name, is_admin)
 VALUES (
     'admin',
     'admin@mytube.local',
-    '$2b$10$rQZ8K1.VQH8XyE5KqD5Qh.Jq7Q8K1.VQH8XyE5KqD5Qh.Jq7Q8K1.',
+    '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.mfHwMEoaZvxwYz6gMm',
     'Admin User',
     true
 );

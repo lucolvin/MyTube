@@ -16,16 +16,23 @@ router.get('/', optionalAuth, async (req, res) => {
     const sortBy = req.query.sort || 'created_at';
     const order = req.query.order === 'asc' ? 'ASC' : 'DESC';
 
-    // Validate sort column
-    const validSorts = ['created_at', 'view_count', 'like_count', 'title', 'duration'];
-    const sortColumn = validSorts.includes(sortBy) ? sortBy : 'created_at';
+    // Validate sort column - use a map for safe column names
+    const sortColumnMap = {
+      'created_at': 'v.created_at',
+      'view_count': 'v.view_count',
+      'like_count': 'v.like_count',
+      'title': 'v.title',
+      'duration': 'v.duration'
+    };
+    const safeSortColumn = sortColumnMap[sortBy] || 'v.created_at';
+    const safeOrder = order === 'ASC' ? 'ASC' : 'DESC';
 
     const result = await db.query(
       `SELECT v.*, c.name as channel_name, c.id as channel_id
        FROM videos v
        LEFT JOIN channels c ON v.channel_id = c.id
        WHERE v.is_public = true
-       ORDER BY v.${sortColumn} ${order}
+       ORDER BY ${safeSortColumn} ${safeOrder}
        LIMIT $1 OFFSET $2`,
       [limit, offset]
     );
