@@ -77,13 +77,7 @@ const Header = ({ onMenuClick }) => {
               </div>
             )}
           </div>
-        ) : (
-          <div className="auth-buttons">
-            <Link to="/login" className="btn btn-outline">
-              Sign in
-            </Link>
-          </div>
-        )}
+        ) : null}
       </div>
     </header>
   );
