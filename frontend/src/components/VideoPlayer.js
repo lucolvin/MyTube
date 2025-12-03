@@ -88,9 +88,6 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
     // Only respond to left click
     if (e.button !== 0) return;
     
-    // Prevent default to avoid interference with native controls
-    e.preventDefault();
-    
     mouseDownTimeRef.current = Date.now();
     
     // Immediately activate speed up
@@ -99,8 +96,6 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
 
   const handleMouseUp = (e) => {
     if (e.button !== 0) return;
-    
-    e.preventDefault();
     
     // Deactivate speed up
     deactivateSpeedUp();

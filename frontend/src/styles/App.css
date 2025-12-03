@@ -382,6 +382,7 @@
   top: 0;
   left: 0;
   width: 100%;
+  /* Leave space for native video controls at the bottom (approximately 50px) */
   height: calc(100% - 50px);
   cursor: pointer;
   z-index: 5;
