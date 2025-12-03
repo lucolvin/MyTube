@@ -37,7 +37,7 @@ A full-featured, self-hosted YouTube clone for your personal media collection. B
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/mytube.git
+   git clone https://github.com/lucolvin/mytube.git
    cd mytube
    ```
 
