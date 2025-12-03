@@ -93,19 +93,15 @@ const Watch = () => {
             const playlistsRes = await api.get('/playlists');
             setPlaylists(playlistsRes.data || []);
             
-            // Check which playlists contain this video
-            const containingPlaylists = [];
-            for (const playlist of playlistsRes.data || []) {
-              try {
-                const playlistDetail = await api.get(`/playlists/${playlist.id}`);
-                if (playlistDetail.data.videos?.some(v => v.id === id)) {
-                  containingPlaylists.push(playlist.id);
-                }
-              } catch (e) {
-                // Ignore errors
-              }
-            }
-            setVideoPlaylists(containingPlaylists);
+            // Check which playlists contain this video using parallel requests
+            const playlistDetailPromises = (playlistsRes.data || []).map(playlist =>
+              api.get(`/playlists/${playlist.id}`)
+                .then(res => res.data.videos?.some(v => v.id === id) ? playlist.id : null)
+                .catch(() => null)
+            );
+            
+            const results = await Promise.all(playlistDetailPromises);
+            setVideoPlaylists(results.filter(id => id !== null));
           } catch (e) {
             // Ignore errors
           }
@@ -303,12 +299,18 @@ const Watch = () => {
                     <button 
                       className="action-btn"
                       onClick={() => setShowPlaylistMenu(!showPlaylistMenu)}
+                      aria-expanded={showPlaylistMenu}
+                      aria-haspopup="true"
                     >
                       <FiList />
                       <span>Save to playlist</span>
                     </button>
                     {showPlaylistMenu && (
-                      <div className="playlist-dropdown">
+                      <div 
+                        className="playlist-dropdown"
+                        role="menu"
+                        aria-label="Save to playlist"
+                      >
                         <div className="playlist-dropdown-header">Save to...</div>
                         {playlists.length === 0 ? (
                           <div className="playlist-dropdown-empty">
@@ -320,6 +322,7 @@ const Watch = () => {
                               key={playlist.id}
                               className="playlist-dropdown-item"
                               onClick={() => handleAddToPlaylist(playlist.id)}
+                              role="menuitem"
                             >
                               {videoPlaylists.includes(playlist.id) ? (
                                 <FiCheck className="playlist-check" />

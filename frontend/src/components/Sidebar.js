@@ -8,6 +8,8 @@ import { MdSubscriptions, MdVideoLibrary, MdHistory } from 'react-icons/md';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
+const DEFAULT_AVATAR_LETTER = 'C';
+
 const Sidebar = ({ isOpen }) => {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
@@ -87,7 +89,7 @@ const Sidebar = ({ isOpen }) => {
                 className={`sidebar-item ${location.pathname === `/channel/${channel.id}` ? 'active' : ''}`}
               >
                 <div className="sidebar-channel-avatar">
-                  {channel.name?.[0]?.toUpperCase() || 'C'}
+                  {channel.name?.[0]?.toUpperCase() || DEFAULT_AVATAR_LETTER}
                 </div>
                 <span>{channel.name}</span>
               </Link>

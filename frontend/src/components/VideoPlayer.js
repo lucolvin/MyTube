@@ -165,6 +165,7 @@ const VideoPlayer = ({ videoId, startPosition = 0, onProgress }) => {
       holdTimeoutRef.current = null;
     }
     mouseDownTimeRef.current = null;
+    keyDownTimeRef.current = null;
   };
 
   // Set initial position
