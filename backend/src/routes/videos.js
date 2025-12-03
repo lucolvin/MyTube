@@ -266,8 +266,11 @@ router.post('/:id/watch', async (req, res) => {
       `INSERT INTO watch_history (video_id, last_position, completed, watched_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (video_id)
-       DO UPDATE SET last_position = $2, completed = COALESCE($3, watch_history.completed), watched_at = NOW()`,
-      [id, position || 0, completed || false]
+       DO UPDATE SET 
+         last_position = EXCLUDED.last_position,
+         completed = COALESCE(EXCLUDED.completed, watch_history.completed),
+         watched_at = NOW()`,
+      [id, Number.isFinite(position) ? Math.floor(position) : 0, completed === true]
     );
 
     res.json({ success: true });
