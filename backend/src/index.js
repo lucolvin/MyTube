@@ -38,7 +38,18 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "blob:"],
       mediaSrc: ["'self'", "blob:"],
-      connectSrc: ["'self'"],
+      // Allow API connections from frontend to backend across origins
+      connectSrc: (() => {
+        const defaults = ["'self'"];
+        const apiUrl = process.env.API_URL || 'http://localhost:3001';
+        const frontendOrigin = process.env.CORS_ORIGIN;
+        const extra = [];
+        // Allow direct calls to API URL
+        if (apiUrl) extra.push(apiUrl);
+        // Allow websocket/fetch to same host different port
+        if (frontendOrigin) extra.push(frontendOrigin);
+        return defaults.concat(extra);
+      })(),
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
@@ -48,10 +59,24 @@ app.use(helmet({
 }));
 
 // CORS configuration
+// Note: Wildcard '*' cannot be used with credentials:true
+const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:7594';
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow same-origin requests (no origin) and the configured origin
+    if (!origin || origin === allowedOrigin) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  },
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+  credentials: true,
+  maxAge: 600
 }));
+// Handle preflight explicitly
+app.options('*', cors());
 
 // Rate limiting
 const limiter = rateLimit({
