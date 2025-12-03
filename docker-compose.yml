@@ -45,7 +45,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3001
+      PORT: 5199
       DB_HOST: db
       DB_PORT: 5432
       DB_USER: ${DB_USER:-mytube}
@@ -77,7 +77,7 @@ services:
     container_name: mytube-frontend
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "7594:80"
     depends_on:
       - backend
 
